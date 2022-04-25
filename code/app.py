@@ -31,7 +31,7 @@ fires['clear_datetime'] = pd.to_datetime(fires['clear_datetime'])
 
 fires = fires.drop(['alm_time', 'clr_time'], axis=1)
 
-years = fires['alarm_datetime'].dt.year.unique()
+years = sorted(fires['alarm_datetime'].dt.year.unique())
 year_choice = st.sidebar.selectbox('', years)
 df = fires.loc[fires.alarm_datetime.dt.year == year_choice]
 
