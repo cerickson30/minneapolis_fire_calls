@@ -39,9 +39,8 @@ year_choice = st.sidebar.selectbox('Select a year:', years)
 
 min_date = fires.loc[fires.alarm_datetime.dt.year == year_choice].alarm_datetime.min().date()
 max_date = fires.loc[fires.alarm_datetime.dt.year == year_choice].alarm_datetime.max().date()
-# df = fires.loc[fires.alarm_datetime.dt.year == year_choice]
 min_date, max_date = st.sidebar.slider('Select a date range:', min_date, max_date, value=(min_date, max_date),
-        format='M/D/YY')
+        format='MMM d')
 
 date_mask = (min_date <= fires.alarm_datetime.dt.date) & (fires.alarm_datetime.dt.date <= max_date)
 df = fires.loc[date_mask]
