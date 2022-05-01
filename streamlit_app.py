@@ -14,15 +14,7 @@ st.set_page_config(
     menu_items=None)
 
 
-# Get and preprocess data
-fires_gdf = pd.read_csv('../data/combined_fires_for_app.csv')
-
-fires_gdf['alarm_date'] = pd.to_datetime(fires['alarm_date'])
-fires_gdf['clear_date'] = pd.to_datetime(fires['clear_date'])
-
-# fires_gdf = gpd.GeoDataFrame(fires, geometry=gpd.points_from_xy(fires.longitude, fires.latitude), crs='EPSG:4326')
-
-
+@st.experimental_memo
 # To fix intersecting shapes
 def fix_geometry_collection(geom):
     if geom.geom_type == 'GeometryCollection':
@@ -37,30 +29,40 @@ def fix_geometry_collection(geom):
         return geom
 
 
+@st.experimental_singleton
+# Get and preprocess data
+def load_data():
+    fires = pd.read_csv('combined_fires_for_app.csv')
+    fires['alarm_date'] = pd.to_datetime(fires['alarm_date'])
+    fires = gpd.GeoDataFrame(fires, geometry=gpd.points_from_xy(fires.longitude, fires.latitude), crs='EPSG:4326')
 
-districts = gpd.read_file('../data/Fire_Districts.geojson')
-districts = districts.drop(['SHAPE_Length', 'SHAPE_Area'], axis=1).rename(columns={'DISTRICT':'District'})
-station_areas = gpd.read_file('../data/Fire_Stations_Areas.geojson')
-station_areas = station_areas.rename(columns={'STATION':'Station'})[['Station', 'geometry']]
-station_districts = gpd.overlay(station_areas, districts)
+    districts = gpd.read_file('Fire_Districts.geojson')
+    districts = districts.drop(['SHAPE_Length', 'SHAPE_Area'], axis=1).rename(columns={'DISTRICT':'District'})
+    station_areas = gpd.read_file('Fire_Stations_Areas.geojson')
+    station_areas = station_areas.rename(columns={'STATION':'Station'})[['Station', 'geometry']]
+    station_districts = gpd.overlay(station_areas, districts)
 
-nhoods = gpd.read_file('../data/Minneapolis_Neighborhoods.geojson')
-nhoods = nhoods.rename(columns={'SYMBOL_NAM':'symbol_name', 'BDNAME':'nhood', 'BDNUM':'BDnum'})[['symbol_name', 'nhood', 'BDnum', 'geometry']]
-nhood_districts = gpd.overlay(nhoods, station_districts, keep_geom_type=False)
-nhood_districts['geometry'] = nhood_districts.geometry.apply(fix_geometry_collection)
+    nhoods = gpd.read_file('Minneapolis_Neighborhoods.geojson')
+    nhoods = nhoods.rename(columns={'SYMBOL_NAM':'symbol_name', 'BDNAME':'nhood', 'BDNUM':'BDnum'})[['symbol_name', 'nhood', 'BDnum', 'geometry']]
+    nhood_districts = gpd.overlay(nhoods, station_districts, keep_geom_type=False)
+    nhood_districts['geometry'] = nhood_districts.geometry.apply(fix_geometry_collection)
+
+    return fires, districts, station_districts, nhood_districts
+
+
+fires, districts, station_districts, nhood_districts = load_data()
+
 
 # Functions
 # Filter data for date range
-@st.experimental_memo
-def filter_fires(df, min_date, max_date):
-    date_mask = (min_date <= df.alarm_date.dt.date) & (df.alarm_date.dt.date <= max_date)
+def filter_fires(fires_gdf, min_date, max_date):
+    date_mask = (min_date <= fires_gdf.alarm_date.dt.date) & (fires_gdf.alarm_date.dt.date <= max_date)
 
-    return df.loc[date_mask]
+    return fires_gdf.loc[date_mask]
 
 # Calculate number of fires within each area
-@st.experimental_memo
-def get_counts(filtered_fires, areas, area_type='District'):
-    gdf = gpd.sjoin(areas, filtered_fires)
+def get_counts(fires_gdf, areas, area_type='District'):
+    gdf = gpd.sjoin(areas, fires_gdf)
 
     counts = gdf.groupby(area_type)[area_type].count()
     counts = pd.DataFrame(counts).rename(columns={area_type:'num_of_fires'}).reset_index()
@@ -73,8 +75,8 @@ def get_point(geometry):
         return LineString(list(Polygon(geometry.geoms[0]).exterior.coords[0:2]))
     return geometry
 
-def map_fire_counts(filtered_fires, areas, area_type='District'):
-    areas_with_counts = areas.merge(get_counts(filtered_fires, areas, area_type), on=area_type)
+def map_fire_counts(fires_gdf, areas, area_type='District'):
+    areas_with_counts = areas.merge(get_counts(fires_gdf, areas, area_type), on=area_type)
 
     if area_type == 'District':
         tooltip_fields = ['District', 'num_of_fires']
@@ -102,7 +104,7 @@ def map_fire_counts(filtered_fires, areas, area_type='District'):
         ).add_to(m)
 
     if area_type == 'nhood':
-        merged_data = areas.overlay(filtered_fires, keep_geom_type=False)
+        merged_data = areas.overlay(fires_gdf, keep_geom_type=False)
         mask = [nhood not in merged_data.nhood.unique() for nhood in nhood_districts.nhood.unique()]
         missing_nhoods = nhood_districts.nhood.unique()[mask]
         if len(missing_nhoods) != 0:
@@ -130,8 +132,8 @@ def map_fire_counts(filtered_fires, areas, area_type='District'):
     return m
 
 
-def map_fire_locations(filtered_fires):
-    minneapolis_boundary = gpd.read_file('../data/Minneapolis_City_boundary.geojson')
+def map_fire_locations(fires_gdf):
+    minneapolis_boundary = gpd.read_file('Minneapolis_City_boundary.geojson')
 
     m = folium.Map(location=[44.9772995, -93.2654692], zoom_start=12, prefer_canvas=True)
 
@@ -145,7 +147,7 @@ def map_fire_locations(filtered_fires):
     )
     boundary.add_to(m)
 
-    for ix, row in filtered_fires.loc[~filtered_fires.latitude.isna()].iterrows():
+    for ix, row in fires_gdf.loc[~fires_gdf.latitude.isna()].iterrows():
         folium.CircleMarker(location = [row['latitude'], row['longitude']], radius=1.5, color='red', opacity=0.6).add_to(m)
 
     return m
@@ -167,7 +169,7 @@ min_date, max_date = st.sidebar.slider('Select a date range:', left_date, right_
 
 chart_choice = st.sidebar.radio('', ['Fire Locations', 'Fires by District', 'Fires by Fire Station', 'Fires by Neighborhood'])
 
-filtered_fires = filter_fires(fires_gdf, min_date, max_date)
+filtered_fires = filter_fires(fires, min_date, max_date)
 num_fires = len(filtered_fires)
 
 if min_date == max_date:
