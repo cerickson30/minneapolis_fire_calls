@@ -136,7 +136,7 @@ def map_fire_counts(fires_gdf, areas, area_type='District'):
 
 
 def map_fire_locations(fires_gdf):
-    minneapolis_boundary = gpd.read_file('Minneapolis_City_boundary.geojson')
+    minneapolis_boundary = gpd.read_file('Minneapolis_City_Boundary.geojson')
 
     m = folium.Map(location=[44.9772995, -93.2654692], zoom_start=12, prefer_canvas=True)
 
