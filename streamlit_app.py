@@ -1,11 +1,14 @@
-import streamlit as st
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import MultiPolygon, LineString, Polygon
 from datetime import date
 import folium
-from streamlit_folium import st_folium
 
+import streamlit as st
+from streamlit_folium import st_folium
+from htbuilder import HtmlElement, div, ul, li, br, hr, a, p, img, styles, classes, fonts
+from htbuilder.units import percent, px
+from htbuilder.funcs import rgba, rgb
 
 st.set_page_config(
     page_title='Minneapolis Fire Calls',
@@ -156,8 +159,6 @@ def map_fire_locations(fires_gdf):
 
 
 # Streamlit stuff
-
-
 st.title('Minneapolis Fire Calls')
 
 years = sorted(fires['alarm_date'].dt.year.unique(), reverse=True)
@@ -201,30 +202,69 @@ elif chart_choice == 'Fires by Neighborhood':
     # call to render Folium map in Streamlit
     st_folium(m, width=600, height=735)
 
-st.markdown('Data accessed from [Open Data Minneapolis](https://opendata.minneapolismn.gov/) on April 22, 2022.')
+st.markdown('Data accessed from [Open Data Minneapolis](https://opendata.minneapolismn.gov/) on May 1, 2022.')
 
 
 
 
-footer = """
+# For the custom footer in Streamlit app
+def image(src_as_string, **style):
+    return img(src=src_as_string, style=styles(**style))
+
+
+def link(link, text, **style):
+    return a(_href=link, _target="_blank", style=styles(**style))(text)
+
+
+def layout(*args):
+
+    style = """
     <style>
-    footer {visibility: hidden;}
-    MainMenu {visibility: hidden;}
-    
-    # footer:hover,  footer:active {
-    #     color: #fa4d00;
-    #     background-color: transparent;
-    #     text-decoration: underline;
-    #     transition: 400ms ease 0s;
-    # }
-    footer:after {
-        content:'Created by Craig Erickson'; 
-        visibility: visible;
-        display: block;
-        position: relative;
-        padding: 5px;
-        top: 2px;
-    }
+      #MainMenu {visibility: hidden;}
+      footer {visibility: hidden;}
     </style>
     """
-st.markdown(footer, unsafe_allow_html=True)
+
+    style_div = styles(
+        left=0,
+        bottom=0,
+        margin=px(0, 0, 0, 0),
+        width=percent(100),
+        text_align="center",
+        height="60px",
+        opacity=0.7,
+    )
+
+    style_hr = styles(
+    )
+
+    body = p()
+    foot = div(style=style_div)(hr(style=style_hr), body)
+
+    st.markdown(style, unsafe_allow_html=True)
+
+    for arg in args:
+        if isinstance(arg, str):
+            body(arg)
+        elif isinstance(arg, HtmlElement):
+            body(arg)
+
+    st.markdown(str(foot), unsafe_allow_html=True)
+
+
+def footer(author_name="Craig Erickson", author_url="https://cerickson30.github.io"):
+    myargs = [
+        "Made with Python 3.8 ",
+        link("https://www.python.org/", image('https://i.imgur.com/ml09ccU.png',
+        	width=px(18), height=px(18), margin= "0em")),
+        " and Streamlit ",
+        link("https://streamlit.io/", image('https://docs.streamlit.io/logo.svg',
+        	width=px(24), height=px(25), margin= "0em")),
+        " by ",
+        link(author_url, author_name, color="#ff0000"),
+        br(),
+    ]
+    layout(*myargs)
+
+
+footer()
